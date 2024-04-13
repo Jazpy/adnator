@@ -1,0 +1,37 @@
+description: Small example demographic model.
+time_units: generations
+demes:
+- name: ANC
+  description: Equilibrium / root population.
+  epochs:
+  - {end_time: 500, start_size: 10000}
+- name: REF01
+  description: Ancestral reference branch.
+  ancestors: [ANC]
+  epochs:
+  - {end_time: 100, start_size: 10000}
+- name: FOC01
+  description: Ancestral focal branch.
+  ancestors: [ANC]
+  epochs:
+  - {end_time: 100, start_size: 10000}
+- name: REF0
+  description: First reference population.
+  ancestors: [REF01]
+  epochs:
+  - {end_time: 0, start_size: 10000}
+- name: REF1
+  description: Second reference population.
+  ancestors: [REF01]
+  epochs:
+  - {end_time: 0, start_size: 10000}
+- name: FOC0
+  description: First focal population.
+  ancestors: [FOC01]
+  epochs:
+  - {end_time: 0, start_size: 10000}
+- name: FOC1
+  description: Second focal population.
+  ancestors: [FOC01]
+  epochs:
+  - {end_time: 0, start_size: 10000}
