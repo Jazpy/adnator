@@ -1,6 +1,7 @@
 focal_populations: ['FOC0', 'FOC1']
 focal_population_sizes: [5, 10]
 reference_populations: ['REF0', 'REF1']
-reference_population_sizes: [2, 2]
+reference_population_sizes: [20, 20]
 demography: utilities/example_demography.yaml
 output_directory: ./example_data/
+fragmentation_distribution: utilities/example_fragmentation_distribution.txt
