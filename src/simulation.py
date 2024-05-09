@@ -65,7 +65,6 @@ class Simulation:
             ValueError: If coalescent simulation has not been run first.
         '''
 
-        print(mp.cpu_count())
         if not self.coalescent_simulation or not self.focal_fps:
             raise ValueError('Coalescent simulation must be run before read simulations!')
 

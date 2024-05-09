@@ -42,7 +42,7 @@ def create_directory_structure(main_dir_fp):
         shutil.rmtree(main_dir_fp)
     os.makedirs(main_dir_fp)
 
-    sub_dirs = ['reference_sequences', 'focal_sequences', 'focal_reads']
+    sub_dirs = ['reference_sequences', 'focal_sequences', 'focal_reads', 'miscellaneous']
 
     for dir in sub_dirs:
         os.makedirs(os.path.join(main_dir_fp, dir))
