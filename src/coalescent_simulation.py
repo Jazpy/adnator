@@ -102,7 +102,8 @@ class CoalescentSimulation:
             RuntimeError: If no coalescent simulation has taken place.
 
         Returns:
-            List of tuples (metadata, filepath) of the written focal sequences
+            Tuple of: (list of tuples (metadata, filepath) of the written focal sequences,
+                       filepath for contamination sequence)
         '''
 
         if not self.trees:
@@ -126,13 +127,14 @@ class CoalescentSimulation:
                                   pop, curr_seqs, self.ploidy)
 
         # Write contamination sequence if applicable
+        conf_fp = None
         if self.con_pop:
             con_sample = self.trees.samples(population=self.pop_id_d[self.con_pop])[-1]
             con_seq    = self.trees.alignments(reference_sequence=self.ancestral_sequence,
                                                samples=[con_sample])
 
-            write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
-                                  'CONTAMINATION_SEQUENCE', con_seq, 1)
+            cont_fp = write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
+                                            'CONTAMINATION_SEQUENCE', con_seq, 1)[0][1]
 
         # Write ancestral sequence
         write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
@@ -153,4 +155,4 @@ class CoalescentSimulation:
             ret.extend(write_fasta_sequences(os.path.join(self.out_dir, 'focal_sequences'),
                                              pop, curr_seqs, self.ploidy))
 
-        return ret
+        return ret, cont_fp

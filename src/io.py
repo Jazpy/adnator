@@ -2,6 +2,15 @@ import os
 import yaml
 import shutil
 
+from collections import defaultdict, namedtuple
+
+
+'''
+Misincorporation objects are a tuple of transition probabilities and the maximum position considered by the
+original misincorporation file.
+'''
+MisincorporationData = namedtuple('MisincorporationData', ['max_pos', 'weights'])
+
 
 def load_yaml(fp):
     '''
@@ -16,6 +25,7 @@ def load_yaml(fp):
     Raises:
         ValueError: If required configuration parameters are not set.
     '''
+
     config = yaml.safe_load(open(fp))
 
     if 'focal_populations' not in config:
@@ -117,3 +127,93 @@ def parse_fragmentation_file(frag_fp):
             raise ValueError('Probabilities in fragmentation file do not add up to 1!')
 
     return (lengths, probs)
+
+
+def __parse_damageprofiler_file(fp):
+    '''
+    Auxiliary function to handle the parsing of a single damageprofiler file.
+
+    Args:
+        fp (str): Filepath for the damageprofiler file.
+
+    Returns:
+        Misincorporation object encoding probability of misincorporation given position and nucleotide,
+        along with information for how much of the strand is considered.
+    '''
+
+    max_pos = 0
+    weights = defaultdict(list)
+
+    with open(fp) as in_f:
+        line = in_f.readline().strip()
+
+        while line[0] == '#' or not line:
+            line = in_f.readline().strip()
+
+        # Parse header
+        idx_mapper = {}
+        toks = line.split()
+        for i, tok in enumerate(toks):
+            if len(tok) == 3 and tok[1] == '>':
+                idx_mapper[tok] = i
+
+        # Parse position lines
+        for line in in_f:
+            if line[0] == '#' or not line.strip():
+                continue
+
+            toks = line.split()
+            curr_pos = int(toks[0])
+            max_pos  = max(curr_pos, max_pos)
+
+            # Build weights for all possible transitions, starting with A>N
+            a_t = float(toks[idx_mapper['A>T']])
+            a_g = float(toks[idx_mapper['A>G']])
+            a_c = float(toks[idx_mapper['A>C']])
+            a_a = 1.0 - sum([a_t, a_g, a_c])
+            weights[(curr_pos, 'A')] = [a_a, a_t, a_g, a_c]
+            # T>N
+            t_a = float(toks[idx_mapper['T>A']])
+            t_g = float(toks[idx_mapper['T>G']])
+            t_c = float(toks[idx_mapper['T>C']])
+            t_t = 1.0 - sum([t_a, t_g, t_c])
+            weights[(curr_pos, 'T')] = [t_a, t_t, t_g, t_c]
+            # G>N
+            g_a = float(toks[idx_mapper['G>A']])
+            g_t = float(toks[idx_mapper['G>T']])
+            g_c = float(toks[idx_mapper['G>C']])
+            g_g = 1.0 - sum([g_a, g_t, g_c])
+            weights[(curr_pos, 'G')] = [g_a, g_t, g_g, g_c]
+            # C>N
+            c_a = float(toks[idx_mapper['C>A']])
+            c_t = float(toks[idx_mapper['C>T']])
+            c_g = float(toks[idx_mapper['C>G']])
+            c_c = 1.0 - sum([c_a, c_t, c_g])
+            weights[(curr_pos, 'C')] = [c_a, c_t, c_g, c_c]
+
+    return MisincorporationData(max_pos=max_pos, weights=weights)
+
+
+def parse_damageprofiler_files(dmg_5_fp, dmg_3_fp):
+    '''
+    Handles parsing of damageprofiler misincorporation files into a dictionary encoding the probability
+    of misincorporation given distance from read start and base in question.
+
+    Args:
+        dmg_5_fp (str): Filepath for the damageprofiler misincorporation file from the 5' end.
+        dmg_3_fp (str): Filepath for the damageprofiler misincorporation file from the 3' end.
+
+    Raises:
+        ValueError: On invalid file format.
+
+    Returns:
+        Misincorporation objects encoding probability of misincorporation given position and nucleotide,
+        along with information for how much of the strand is considered.
+    '''
+    try:
+        mis_5 = __parse_damageprofiler_file(dmg_5_fp)
+        mis_3 = __parse_damageprofiler_file(dmg_3_fp)
+    except:
+        raise ValueError('Exception while parsing damageprofiler file, is it present and well-formed?')
+
+    return mis_5, mis_3

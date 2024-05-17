@@ -27,6 +27,8 @@ class Simulation:
         # Create with None values so we can still check if they have been set without attribute errors
         self.coalescent_simulation = None
         self.read_simulation = None
+        self.focal_fps = None
+        self.cont_fp = None
 
 
     def run_coalescent_simulation(self, demography=None):
@@ -48,7 +50,7 @@ class Simulation:
 
         # Write results of coalescent simulation
         create_directory_structure(self.config_d['output_directory'])
-        self.focal_fps = self.coalescent_simulation.write_sequences()
+        self.focal_fps, self.cont_fp = self.coalescent_simulation.write_sequences()
 
 
     def run_read_simulation(self, num_procs=mp.cpu_count()):
@@ -69,4 +71,4 @@ class Simulation:
             raise ValueError('Coalescent simulation must be run before read simulations!')
 
         self.read_simulation = ReadSimulation(self.config_d, num_procs)
-        self.read_simulation.simulate_reads(self.focal_fps)
+        self.read_simulation.simulate_reads(self.focal_fps, self.cont_fp)

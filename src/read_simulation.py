@@ -2,7 +2,7 @@ import os
 import multiprocessing as mp
 import numpy as np
 
-from src.io import parse_fragmentation_file
+from src.io import parse_fragmentation_file, parse_damageprofiler_files, MisincorporationData
 
 
 class ReadSimulation:
@@ -31,12 +31,19 @@ class ReadSimulation:
         self.foc_pops_sizes = config_d['focal_population_sizes']
 
         # General simulation parameters
+        self.mis_fps   = config_d.get('misincorporation_files', None)
+        self.cont_p    = config_d.get('contamination_proportion', 0)
         self.coverage  = config_d.get('average_coverage', 5)
         self.frags     = config_d.get('fragmentation_distribution')
         self.seq_len   = config_d.get('sequence_length', 10_000)
         self.ploidy    = config_d.get('ploidy', 2)
         self.out_dir   = os.path.join(config_d.get('output_directory', '.'), 'focal_reads')
         self.num_procs = num_procs
+
+        # Might be set later
+        self.cont_sequence = None
+        self.mis_5 = None
+        self.mis_3 = None
 
 
     def simulate_reads_worker(self):
@@ -47,6 +54,7 @@ class ReadSimulation:
         Returns:
             List of tuples (length, start) describing all simulated reads.
         '''
+
         ret = []
 
         frags  = np.random.choice(self.lengths, self.num_reads, p=self.probs)
@@ -63,6 +71,7 @@ class ReadSimulation:
             sequence_data (tuple of metadata and filepath): Information for the true sequence.
             reads (list of length and start tuples): Information for the read lengths and placement.
         '''
+
         population, individual, chromosome = sequence_data[0]
         sequence_fp = sequence_data[1]
         out_fp = os.path.join(self.out_dir, f'{population}_{individual}.fastq')
@@ -75,20 +84,33 @@ class ReadSimulation:
                     continue
                 true_seq.extend(line.strip())
 
+        # Random values that determine if read comes from contaminant or not
+        cont_errs = np.random.random(len(reads)) < self.cont_p
+
         # Write each read to FASTQ file
         with open(out_fp, 'a') as out_f:
-            for i, (length, start) in enumerate(reads):
-                to_write = f'@SEQ_{population}_{individual}_{chromosome}_{i}\n'
+            for i, ((length, start), cont_err) in enumerate(zip(reads, cont_errs)):
+                # Contaminated reads are written directly
+                if cont_err:
+                    to_write  = f'@SEQ_CONTAMINATED_{population}_{individual}_{chromosome}_{i}\n'
+                    to_write += f'{self.cont_sequence[start:start + length]}\n+\n{"j" * length}\n'
+                    out_f.write(to_write)
+                    continue
 
-                # Get true sequence
+                to_write  = f'@SEQ_{population}_{individual}_{chromosome}_{i}\n'
                 true_read = true_seq[start:start + length]
                 dmg_read  = []
 
                 # Error simulation
                 deam_errs = np.random.random(len(true_read))
                 geno_errs = np.random.random(len(true_read))
-                for nuc, geno_err, deam_err in zip(true_read, geno_errs, deam_errs):
-                    # TODO: Deamination error
+                for i, (nuc, geno_err, deam_err) in enumerate(zip(true_read, geno_errs, deam_errs)):
+                    # Deamination error
+                    if self.mis_5 and i <= self.mis_5.max_pos:
+                        nuc = np.random.choice(list('ATGC'), p=self.mis_5.weights[(i, nuc)])
+                    elif self.mis_3 and (length - (i + 1)) <= self.mis_3.max_pos:
+                        nuc = np.random.choice(list('ATGC'), p=self.mis_3.weights[(length - (i + 1), nuc)])
+
                     # Genotyping error
                     if geno_err < 0.00133333:
                         nuc = np.random.choice(list('ATGC'))
@@ -96,11 +118,11 @@ class ReadSimulation:
                     dmg_read.append(nuc)
 
                 # Write to file
-                to_write += f'{"".join(dmg_read)}\n+\n{"j" * len(true_read)}\n'
+                to_write += f'{"".join(dmg_read)}\n+\n{"j" * length}\n'
                 out_f.write(to_write)
 
 
-    def simulate_reads(self, fasta_fps):
+    def simulate_reads(self, fasta_fps, cont_fp):
         '''
         Simulate the read lengths and positions for all individuals. If a fragmentation distribution
         is provided, this will be taken as the basis for the read lengths, otherwise a constant length
@@ -117,6 +139,19 @@ class ReadSimulation:
         else:
             self.lengths, self.probs = [70], [1.0]
             self.num_reads = round((self.seq_len / 70) / self.ploidy)
+
+        # Create contamination sequence if provided
+        if cont_fp:
+            self.cont_sequence = []
+            with open(cont_fp) as in_f:
+                for line in in_f:
+                    if line[0] == '>':
+                        continue
+                    self.cont_sequence.extend(line.strip())
+
+        # Get misincorporation information if provided
+        if self.mis_fps:
+            self.mis_5, self.mis_3 = parse_damageprofiler_files(self.mis_fps[0], self.mis_fps[1])
 
         # Simulate reads in parallel
         pool  = mp.Pool(self.num_procs)
