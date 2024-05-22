@@ -1,10 +1,17 @@
+# General simulation parameters
+output_directory: ./example_data/
+
+# Coalescent simulation parameters
 demography: utilities/example_demography.yaml
+sequence_length: 1000000
 focal_populations: ['FOC0', 'FOC1']
 focal_population_sizes: [5, 10]
 reference_populations: ['REF0', 'REF1']
 reference_population_sizes: [5, 10]
+
+# Read simulation parameters
+average_coverage: 1
 contamination_population: 'REF0'
 contamination_proportion: 0.02
 fragmentation_distribution: utilities/example_fragmentation_distribution.txt
-output_directory: ./example_data/
 misincorporation_files: ['utilities/example_5p_misincorporations.txt', 'utilities/example_3p_misincorporations.txt']

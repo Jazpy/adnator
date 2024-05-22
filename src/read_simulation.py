@@ -135,10 +135,10 @@ class ReadSimulation:
         if self.frags:
             self.lengths, self.probs = parse_fragmentation_file(self.frags)
             avg_length = np.average(self.lengths, weights=self.probs)
-            self.num_reads  = round((self.seq_len / avg_length) / self.ploidy)
+            self.num_reads  = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
         else:
             self.lengths, self.probs = [70], [1.0]
-            self.num_reads = round((self.seq_len / 70) / self.ploidy)
+            self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)
 
         # Create contamination sequence if provided
         if cont_fp:
