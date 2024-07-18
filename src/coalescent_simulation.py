@@ -5,7 +5,7 @@ import tskit
 import demes
 import numpy as np
 
-from src.io import write_fasta_sequences
+from src.io import write_fasta_sequences, load_ancestral_sequence
 
 
 class CoalescentSimulation:
@@ -40,12 +40,13 @@ class CoalescentSimulation:
 
         # Required parameters
         self.dem_model      = msprime.Demography.from_demes(demes.load(config_d['demography'])) or demography
-        self.foc_pops       = config_d['focal_populations']
-        self.foc_pops_sizes = config_d['focal_population_sizes']
-        self.ref_pops       = config_d['reference_populations']
-        self.ref_pops_sizes = config_d['reference_population_sizes']
+        self.foc_pops       = config_d.get('focal_populations', [])
+        self.foc_pops_sizes = config_d.get('focal_population_sizes', [])
+        self.ref_pops       = config_d.get('reference_populations', [])
+        self.ref_pops_sizes = config_d.get('reference_population_sizes', [])
 
         # General simulation parameters
+        self.anc_fp  = config_d.get('ancestral_sequence')
         self.seq_len = config_d.get('sequence_length', 10_000)
         self.mu      = config_d.get('mutation_rate', 1.5e-8)
         self.rho_map = config_d.get('recombination_map')
@@ -56,6 +57,13 @@ class CoalescentSimulation:
         if self.rho and self.rho_map:
             raise ValueError('"recombination_rate" and "recombination_map" parameters are both set!')
 
+        # Load ancestral sequence if provided
+        self.ancestral_sequence = None
+        if self.anc_fp:
+            self.ancestral_sequence = load_ancestral_sequence(self.anc_fp, self.seq_len)
+            self.seq_len = len(self.ancestral_sequence)
+            config_d['sequence_length'] = self.seq_len
+
         # Assume no contamination unless specified
         self.con_pop = config_d.get('contamination_population', None)
 
@@ -65,7 +73,6 @@ class CoalescentSimulation:
 
         # Set to None so we can build them only if needed
         self.trees = None
-        self.ancestral_sequence = None
 
 
     def run(self):
@@ -127,7 +134,7 @@ class CoalescentSimulation:
                                   pop, curr_seqs, self.ploidy)
 
         # Write contamination sequence if applicable
-        conf_fp = None
+        cont_fp = None
         if self.con_pop:
             con_sample = self.trees.samples(population=self.pop_id_d[self.con_pop])[-1]
             con_seq    = self.trees.alignments(reference_sequence=self.ancestral_sequence,

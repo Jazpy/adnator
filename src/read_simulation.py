@@ -1,9 +1,9 @@
 import os
+import random
 import multiprocessing as mp
 import numpy as np
 
 from src.io import parse_fragmentation_file, parse_damageprofiler_files, MisincorporationData
-
 
 class ReadSimulation:
     '''
@@ -46,7 +46,7 @@ class ReadSimulation:
         self.mis_3 = None
 
 
-    def simulate_reads_worker(self):
+    def __simulate_read_coords(self):
         '''
         Internal function that handles the read position and length calculations. This function
         will be called in parallel for all focal chromosomes
@@ -57,13 +57,13 @@ class ReadSimulation:
 
         ret = []
 
-        frags  = np.random.choice(self.lengths, self.num_reads, p=self.probs)
+        frags  = random.choices(self.lengths, k=self.num_reads, weights=self.probs)
         starts = np.random.randint(0, self.seq_len - 1, self.num_reads)
 
         return [(self.seq_len - s if s + f - 1 >= self.seq_len else f, s) for f, s in zip(frags, starts)]
 
 
-    def write_reads_with_errors_worker(self, sequence_data, reads):
+    def write_reads_with_errors_worker(self, sequence_data):
         '''
         Write FASTQ formatted reads to storage, while simulating genotyping error and misincorporation.
 
@@ -71,6 +71,7 @@ class ReadSimulation:
             sequence_data (tuple of metadata and filepath): Information for the true sequence.
             reads (list of length and start tuples): Information for the read lengths and placement.
         '''
+        reads = self.__simulate_read_coords()
 
         population, individual, chromosome = sequence_data[0]
         sequence_fp = sequence_data[1]
@@ -88,38 +89,42 @@ class ReadSimulation:
         cont_errs = np.random.random(len(reads)) < self.cont_p
 
         # Write each read to FASTQ file
+        to_write = ''
         with open(out_fp, 'a') as out_f:
-            for i, ((length, start), cont_err) in enumerate(zip(reads, cont_errs)):
+            for i, ((length, start), cont_err) in enumerate(zip(reads, cont_errs), start=1):
+                # Write if we accumulated enough in the temp string
+                if i % 500 == 0:
+                    out_f.write(to_write)
+                    to_write = ''
+
                 # Contaminated reads are written directly
                 if cont_err:
-                    to_write  = f'@SEQ_CONTAMINATED_{population}_{individual}_{chromosome}_{i}\n'
+                    to_write += f'@SEQ_CONTAMINATED_{population}_{individual}_{chromosome}_{i - 1}\n'
                     to_write += f'{self.cont_sequence[start:start + length]}\n+\n{"j" * length}\n'
-                    out_f.write(to_write)
                     continue
 
-                to_write  = f'@SEQ_{population}_{individual}_{chromosome}_{i}\n'
+                to_write += f'@SEQ_{population}_{individual}_{chromosome}_{i - 1}\n'
                 true_read = true_seq[start:start + length]
                 dmg_read  = []
 
                 # Error simulation
-                deam_errs = np.random.random(len(true_read))
-                geno_errs = np.random.random(len(true_read))
-                for i, (nuc, geno_err, deam_err) in enumerate(zip(true_read, geno_errs, deam_errs)):
+                geno_errs = np.random.random(len(true_read)) < 0.00133333
+                dmg_read  = true_read
+                for j, (nuc, geno_err) in enumerate(zip(true_read, geno_errs)):
                     # Deamination error
-                    if self.mis_5 and i <= self.mis_5.max_pos:
-                        nuc = np.random.choice(list('ATGC'), p=self.mis_5.weights[(i, nuc)])
-                    elif self.mis_3 and (length - (i + 1)) <= self.mis_3.max_pos:
-                        nuc = np.random.choice(list('ATGC'), p=self.mis_3.weights[(length - (i + 1), nuc)])
+                    if self.mis_5 and j <= self.mis_5.max_pos:
+                        dmg_read[j] = random.choices(list('ATGC'),
+                                                     weights=self.mis_5.weights[(j, nuc)])[0]
+                    elif self.mis_3 and (length - (j + 1)) <= self.mis_3.max_pos:
+                        dmg_read[j] = random.choices(list('ATGC'),
+                                                     weights=self.mis_3.weights[(length - (j + 1), nuc)])[0]
 
                     # Genotyping error
-                    if geno_err < 0.00133333:
-                        nuc = np.random.choice(list('ATGC'))
+                    if geno_err:
+                        dmg_read[j] = random.choices(list('ATGC'))[0]
 
-                    dmg_read.append(nuc)
-
-                # Write to file
                 to_write += f'{"".join(dmg_read)}\n+\n{"j" * length}\n'
-                out_f.write(to_write)
+            out_f.write(to_write)
 
 
     def simulate_reads(self, fasta_fps, cont_fp):
@@ -154,9 +159,5 @@ class ReadSimulation:
             self.mis_5, self.mis_3 = parse_damageprofiler_files(self.mis_fps[0], self.mis_fps[1])
 
         # Simulate reads in parallel
-        pool  = mp.Pool(self.num_procs)
-        reads = pool.starmap(self.simulate_reads_worker,
-                             [() for _ in range(sum(self.foc_pops_sizes) * self.ploidy)])
-
-        pool.starmap(self.write_reads_with_errors_worker,
-                     [(seq, read) for seq, read in zip(fasta_fps, reads)])
+        pool = mp.Pool(self.num_procs)
+        pool.map(self.write_reads_with_errors_worker, fasta_fps)

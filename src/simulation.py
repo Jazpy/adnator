@@ -4,6 +4,7 @@ from src.coalescent_simulation import CoalescentSimulation
 from src.read_simulation import ReadSimulation
 from src.io import load_yaml, create_directory_structure
 
+
 class Simulation:
     '''
     Class representing the main simulation object. This object will hold more specific simulations,

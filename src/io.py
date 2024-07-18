@@ -32,9 +32,7 @@ def load_yaml(fp):
         raise ValueError('CONFIG ERROR: Need list of focal populations to simulate!')
     if 'focal_population_sizes' not in config:
         raise ValueError('CONFIG ERROR: Need number of individuals to simulate for focal populations!')
-    if 'reference_populations' not in config:
-        raise ValueError('CONFIG ERROR: Need list of reference populations to simulate')
-    if 'reference_population_sizes' not in config:
+    if 'reference_population_sizes' not in config and 'reference_populations' in config:
         raise ValueError('CONFIG ERROR: Need number of individuals to simulate for reference populations!')
 
     return config
@@ -217,3 +215,36 @@ def parse_damageprofiler_files(dmg_5_fp, dmg_3_fp):
         raise ValueError('Exception while parsing damageprofiler file, is it present and well-formed?')
 
     return mis_5, mis_3
+
+
+def load_ancestral_sequence(seq_fp, seq_len):
+    '''
+    Handles loading of a fasta file into memory to be used as an ancestral sequence for
+    coalescent simulations.
+
+    Args:
+        seq_fp (str): Filepath for the sequence in FASTA format.
+        seq_len (int): Maximum number of base pairs to load.
+
+    Raises:
+        ValueError: On invalid file format.
+
+    Returns:
+        FASTA sequence as a string.
+    '''
+    seqs = []
+    curr_len = 0
+    with open(seq_fp) as in_f:
+        next(in_f)
+        for line in in_f:
+            line = line.strip()
+            seqs.append(line)
+            curr_len += len(line)
+
+            if curr_len >= seq_len:
+                break
+
+    if curr_len < seq_len:
+        print(f'WARNING: Provided ancestral sequence is shorter than requested length. New length = {curr_len}')
+
+    return ''.join(seqs)[:seq_len]
