@@ -1,5 +1,6 @@
 import os
 import random
+import ctypes
 import multiprocessing as mp
 import numpy as np
 
@@ -26,6 +27,7 @@ class ReadSimulation:
             num_procs (int, optional): Number of processes to spawn, will parallelize simulations
                 to a per chromosome level. Defaults to number of virtual cores in the system.
         '''
+
         # Required parameters
         self.foc_pops       = config_d['focal_populations']
         self.foc_pops_sizes = config_d['focal_population_sizes']
@@ -59,6 +61,7 @@ class ReadSimulation:
         Returns:
             List of tuples (length, start) describing all simulated reads.
         '''
+
         ret = []
 
         frags  = random.choices(self.lengths, k=self.num_reads, weights=self.probs)
@@ -140,6 +143,14 @@ class ReadSimulation:
         Args:
             fasta_fps (list of (metadata, filepath) tuples): Metadata and filepath for all true sequences.
         '''
+        cpp_library   = ctypes.cdll.LoadLibrary('src/read_sim.so')
+
+        np_fasta_fps  = np.array(fasta_fps, dtype=np.chararray)
+        fasta_fps_ptr = ctypes.cast(np_fasta_fps.ctypes.data, ctypes.POINTER(ctypes.c_char_p))
+        cpp_library.simulate_reads(len(fasta_fps), fasta_fps_ptr, ctypes.c_char_p(cont_fp),
+                                   ctypes.c_char_p(self.frags), self.seq_len, self.ploidy,
+                                   self.coverage)
+        quit()
         if self.frags:
             self.lengths, self.probs = parse_fragmentation_file(self.frags)
             avg_length = np.average(self.lengths, weights=self.probs)
