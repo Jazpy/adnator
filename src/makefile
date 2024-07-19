@@ -1,4 +1,5 @@
+CXX = clang++
 read_sim.so: read_simulation.o
-	$(CXX) -shared $^ -o $@ -Wl,--no-whole-archive
+	$(CXX) -shared $^ -o $@ -ltbb -fopenmp
 
-read_simulation.o : CXXFLAGS+=-fPIC
+read_simulation.o : CXXFLAGS+=-fPIC -std=c++17 -Wpedantic -fopenmp

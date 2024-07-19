@@ -111,13 +111,11 @@ class ReadSimulation:
                     continue
 
                 to_write += f'@SEQ_{population}_{individual}_{chromosome}_{i - 1}\n'
-                true_read = true_seq[start:start + length]
-                dmg_read  = []
+                dmg_read  = true_seq[start:start + length]
 
                 # Error simulation
-                geno_errs = np.random.random(len(true_read)) < 0.00133333
-                dmg_read  = true_read
-                for j, (nuc, geno_err) in enumerate(zip(true_read, geno_errs)):
+                geno_errs = np.random.random(len(dmg_read)) < 0.00133333
+                for j, (nuc, geno_err) in enumerate(zip(dmg_read, geno_errs)):
                     # Deamination error
                     if self.mis_5 and j <= self.mis_5.max_pos:
                         dmg_read[j] = random.choices(list('ATGC'),
@@ -145,11 +143,30 @@ class ReadSimulation:
         '''
         cpp_library   = ctypes.cdll.LoadLibrary('src/read_sim.so')
 
-        np_fasta_fps  = np.array(fasta_fps, dtype=np.chararray)
-        fasta_fps_ptr = ctypes.cast(np_fasta_fps.ctypes.data, ctypes.POINTER(ctypes.c_char_p))
-        cpp_library.simulate_reads(len(fasta_fps), fasta_fps_ptr, ctypes.c_char_p(cont_fp),
-                                   ctypes.c_char_p(self.frags), self.seq_len, self.ploidy,
-                                   self.coverage)
+        pop_lst, ind_lst, chr_lst, seq_lst, out_lst = [], [], [], [], []
+        for (population, individual, chromosome), seq_fp in fasta_fps:
+            pop_lst.append(population)
+            ind_lst.append(str(individual))
+            chr_lst.append(str(chromosome))
+            seq_lst.append(seq_fp)
+            out_lst.append(os.path.join(self.out_dir, f'{population}_{individual}.fastq'))
+
+        pop_arr = (ctypes.c_char_p * len(pop_lst))()
+        ind_arr = (ctypes.c_char_p * len(ind_lst))()
+        chr_arr = (ctypes.c_char_p * len(chr_lst))()
+        seq_arr = (ctypes.c_char_p * len(seq_lst))()
+        out_arr = (ctypes.c_char_p * len(out_lst))()
+
+        pop_arr[:] = [i.encode("utf-8") for i in pop_lst]
+        ind_arr[:] = [i.encode("utf-8") for i in ind_lst]
+        chr_arr[:] = [i.encode("utf-8") for i in chr_lst]
+        seq_arr[:] = [i.encode("utf-8") for i in seq_lst]
+        out_arr[:] = [i.encode("utf-8") for i in out_lst]
+
+        cpp_library.simulate_reads(len(fasta_fps), self.seq_len, self.ploidy, ctypes.c_float(self.coverage),
+                                   seq_arr, pop_arr, ind_arr, chr_arr, out_arr,
+                                   ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
+                                   ctypes.c_char_p((self.frags if self.frags else '').encode('utf-8')))
         quit()
         if self.frags:
             self.lengths, self.probs = parse_fragmentation_file(self.frags)
