@@ -17,23 +17,14 @@ using std::discrete_distribution;
 using std::uniform_int_distribution;
 using std::uniform_real_distribution;
 
-discrete_distribution<int> build_frag_distribution(map<int, int> &frag_len_mapper, const char *frags_fp,
-                                                   size_t seq_len, size_t ploidy,
-                                                   double coverage, size_t &num_reads)
+discrete_distribution<int> build_frag_distribution(map<int, int> &frag_len_mapper, size_t frag_dist_len,
+                                                   const int *frag_lens, const double *frag_probs)
 {
-    float avg_length = 0;
-    vector<double> frag_len_weights;
-    if (frags_fp[0] != '\0') {
-        // TODO Handle frag distribution file
-    } else {
-        frag_len_mapper[0] = 70;
-        frag_len_weights.push_back(1);
-        avg_length = 70;
-    }
+    for (int i = 0; i != frag_dist_len; ++i)
+        frag_len_mapper[i] = frag_lens[i];
 
-    num_reads = std::round(((seq_len / avg_length) / ploidy) * coverage);
-
-    return discrete_distribution<int>(frag_len_weights.begin(), frag_len_weights.end());
+    vector<double> frag_dist_weights(frag_probs, frag_probs + frag_dist_len);
+    return discrete_distribution<int>(frag_dist_weights.begin(), frag_dist_weights.end());
 }
 
 struct write_reads_args {
@@ -48,6 +39,9 @@ struct write_reads_args {
     size_t num_reads;
     size_t seq_len;
     mt19937 *generator;
+    double cont_p;
+    bool has_cont;
+    string *cont_seq;
 };
 
 string load_sequence(const string &fp, size_t seq_len)
@@ -94,7 +88,7 @@ void write_reads_with_errors(const write_reads_args &args)
                                             args.seq_len, generator);
 
     // TODO Test moving this to global
-    uniform_real_distribution<float> error_dist(0.f, 1.f);
+    uniform_real_distribution<double> error_dist(0.f, 1.f);
     uniform_int_distribution<int>    atgc_dist(0, 3);
 
     // Load true sequence
@@ -103,18 +97,26 @@ void write_reads_with_errors(const write_reads_args &args)
     // Write each read to FASTQ file
     std::ofstream out_f(args.out_fp, std::ofstream::out);
     string endo_read_tag = "@SEQ_" + args.population + "_" + args.ind + "_" + args.chr + "_";
+    string cont_read_tag = "@SEQ_CONTAMINATED_" + args.population + "_" + args.ind + "_" + args.chr + "_";
     for (size_t i = 0; i != read_coords.size(); ++i) {
         uint64_t start = read_coords[i].first;
         uint64_t len   = read_coords[i].second;
+        string quals(len, 'j');
+
+        // Introduce contamination if check passes
+        if (args.has_cont && error_dist(generator) < args.cont_p) {
+            out_f << cont_read_tag + std::to_string(i) + "\n" +
+                     args.cont_seq->substr(start, len) + "\n" + quals + "\n";
+            continue;
+        }
 
         string read_tag = endo_read_tag + std::to_string(i);
-        string quals(len, 'j');
         string to_write = read_tag + "\n";
 
         // Read that will get damaged
-        string damaged = true_sequence.substr(start, start + len);
+        string damaged = true_sequence.substr(start, len);
 
-        vector<float> geno_errors(damaged.size());
+        vector<double> geno_errors(damaged.size());
         std::generate(geno_errors.begin(), geno_errors.end(),
                       [&](){return error_dist(generator);});
 
@@ -131,20 +133,23 @@ void write_reads_with_errors(const write_reads_args &args)
 }
 
 extern "C"
-void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t ploidy, float coverage,
-                    const char **fasta_fps, const char **populations,
+void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t ploidy, double coverage,
+                    size_t num_reads, size_t frag_dist_len, const int *frag_lens, const double *frag_probs,
+                    double cont_p, const char **fasta_fps, const char **populations,
                     const char **individuals, const char **chromosomes, const char **out_fps,
                     const char *cont_fp, const char *frags_fp)
 {
     // Build generator for fragment lengths and starts
     map<int, int> frag_len_mapper;
-    size_t num_reads = 0;
-    auto frag_dist = build_frag_distribution(frag_len_mapper, frags_fp, seq_len,
-                                             ploidy, coverage, num_reads);
+    auto frag_dist = build_frag_distribution(frag_len_mapper, frag_dist_len, frag_lens, frag_probs);
     uniform_int_distribution<uint64_t> pos_dist(0, seq_len - 1);
 
+    // Handle contamination sequence
+    string cont_sequence = "";
+    bool   has_cont = (cont_fp[0] != '\0');
+    if (has_cont)
+        cont_sequence = load_sequence(cont_fp, seq_len);
 
-    // TODO Handle contamination sequence
     // TODO Handle misincorporation stuff
 
     #pragma omp parallel for
@@ -160,7 +165,10 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t ploidy, float c
         new_args.pos_dist   = &pos_dist;
         new_args.num_reads  = num_reads;
         new_args.seq_len    = seq_len;
-        //new_args.generator  = &generator;
+        new_args.cont_p     = cont_p;
+        new_args.has_cont   = has_cont;
+        new_args.cont_seq   = &cont_sequence;
+
         write_reads_with_errors(new_args);
     }
 

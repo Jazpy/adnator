@@ -24,8 +24,9 @@ class ReadSimulation:
 
         Args:
             config_d (str): Configuration dictionary containing read simulation parameters.
-            num_procs (int, optional): Number of processes to spawn, will parallelize simulations
-                to a per chromosome level. Defaults to number of virtual cores in the system.
+            num_procs (int, optional): CURRENTLY IGNORED. Number of processes to spawn, will
+                parallelize simulations to a per chromosome level. Defaults to number of
+                virtual cores in the system.
         '''
 
         # Required parameters
@@ -141,7 +142,21 @@ class ReadSimulation:
         Args:
             fasta_fps (list of (metadata, filepath) tuples): Metadata and filepath for all true sequences.
         '''
-        cpp_library   = ctypes.cdll.LoadLibrary('src/read_sim.so')
+        # Get fragmentation distribution information if provided
+        if self.frags:
+            self.lengths, self.probs = parse_fragmentation_file(self.frags)
+            avg_length = np.average(self.lengths, weights=self.probs)
+            self.num_reads = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
+        else:
+            self.lengths, self.probs = [70], [1.0]
+            self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)
+
+        # Get misincorporation information if provided
+        if self.mis_fps:
+            self.mis_5, self.mis_3 = parse_damageprofiler_files(self.mis_fps[0], self.mis_fps[1])
+
+        # Hand off to CPP
+        cpp_library = ctypes.cdll.LoadLibrary('src/read_sim.so')
 
         pop_lst, ind_lst, chr_lst, seq_lst, out_lst = [], [], [], [], []
         for (population, individual, chromosome), seq_fp in fasta_fps:
@@ -156,39 +171,19 @@ class ReadSimulation:
         chr_arr = (ctypes.c_char_p * len(chr_lst))()
         seq_arr = (ctypes.c_char_p * len(seq_lst))()
         out_arr = (ctypes.c_char_p * len(out_lst))()
+        fra_arr = (ctypes.c_int    * len(self.lengths))()
+        pro_arr = (ctypes.c_double * len(self.probs))()
 
         pop_arr[:] = [i.encode("utf-8") for i in pop_lst]
         ind_arr[:] = [i.encode("utf-8") for i in ind_lst]
         chr_arr[:] = [i.encode("utf-8") for i in chr_lst]
         seq_arr[:] = [i.encode("utf-8") for i in seq_lst]
         out_arr[:] = [i.encode("utf-8") for i in out_lst]
+        fra_arr[:] = self.lengths
+        pro_arr[:] = self.probs
 
-        cpp_library.simulate_reads(len(fasta_fps), self.seq_len, self.ploidy, ctypes.c_float(self.coverage),
-                                   seq_arr, pop_arr, ind_arr, chr_arr, out_arr,
+        cpp_library.simulate_reads(len(fasta_fps), self.seq_len, self.ploidy, ctypes.c_double(self.coverage),
+                                   self.num_reads, len(self.lengths), fra_arr, pro_arr,
+                                   ctypes.c_double(self.cont_p), seq_arr, pop_arr, ind_arr, chr_arr, out_arr,
                                    ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
                                    ctypes.c_char_p((self.frags if self.frags else '').encode('utf-8')))
-        quit()
-        if self.frags:
-            self.lengths, self.probs = parse_fragmentation_file(self.frags)
-            avg_length = np.average(self.lengths, weights=self.probs)
-            self.num_reads = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
-        else:
-            self.lengths, self.probs = [70], [1.0]
-            self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)
-
-        # Create contamination sequence if provided
-        if cont_fp:
-            self.cont_sequence = []
-            with open(cont_fp) as in_f:
-                for line in in_f:
-                    if line[0] == '>':
-                        continue
-                    self.cont_sequence.extend(line.strip())
-
-        # Get misincorporation information if provided
-        if self.mis_fps:
-            self.mis_5, self.mis_3 = parse_damageprofiler_files(self.mis_fps[0], self.mis_fps[1])
-
-        # Simulate reads in parallel
-        pool = mp.Pool(self.num_procs)
-        pool.map(self.write_reads_with_errors_worker, fasta_fps)
