@@ -1,5 +1,6 @@
 import os
 import random
+import ctypes
 import multiprocessing as mp
 import numpy as np
 
@@ -39,6 +40,11 @@ class ReadSimulation:
         self.ploidy    = config_d.get('ploidy', 2)
         self.out_dir   = os.path.join(config_d.get('output_directory', '.'), 'focal_reads')
         self.num_procs = num_procs
+
+        if self.coverage <= 0:
+            raise ValueError('"coverage" must be larger than 0!')
+        if self.cont_p < 0:
+            raise ValueError('"contamination_proportion" can\'t be negative!')
 
         # Might be set later
         self.cont_sequence = None
@@ -136,11 +142,18 @@ class ReadSimulation:
         Args:
             fasta_fps (list of (metadata, filepath) tuples): Metadata and filepath for all true sequences.
         '''
+        cpp_library   = ctypes.cdll.LoadLibrary('src/read_sim.so')
 
+        np_fasta_fps  = np.array(fasta_fps, dtype=np.chararray)
+        fasta_fps_ptr = ctypes.cast(np_fasta_fps.ctypes.data, ctypes.POINTER(ctypes.c_char_p))
+        cpp_library.simulate_reads(len(fasta_fps), fasta_fps_ptr, ctypes.c_char_p(cont_fp),
+                                   ctypes.c_char_p(self.frags), self.seq_len, self.ploidy,
+                                   self.coverage)
+        quit()
         if self.frags:
             self.lengths, self.probs = parse_fragmentation_file(self.frags)
             avg_length = np.average(self.lengths, weights=self.probs)
-            self.num_reads  = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
+            self.num_reads = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
         else:
             self.lengths, self.probs = [70], [1.0]
             self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)

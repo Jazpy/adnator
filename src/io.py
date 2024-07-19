@@ -245,6 +245,6 @@ def load_ancestral_sequence(seq_fp, seq_len):
                 break
 
     if curr_len < seq_len:
-        print(f'WARNING: Provided ancestral sequence is shorter than requested length. New length = {curr_len}')
+        print(f'WARNING: Provided ancestral sequence is shorter than requested length. New length = {curr_len}.')
 
     return ''.join(seqs)[:seq_len]

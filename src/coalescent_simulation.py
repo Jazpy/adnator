@@ -54,8 +54,34 @@ class CoalescentSimulation:
         self.ploidy  = config_d.get('ploidy', 2)
         self.out_dir = config_d.get('output_directory', '.')
 
+        # Error handling
         if self.rho and self.rho_map:
             raise ValueError('"recombination_rate" and "recombination_map" parameters are both set!')
+        if self.ploidy < 1:
+            raise ValueError('"ploidy" must be larger than 0!')
+        if self.seq_len < 1:
+            raise ValueError('"sequence_length" must be larger than 0!')
+        if self.mu < 0:
+            raise ValueError('"mutation_rate" can\'t be negative!')
+        if self.rho < 0:
+            raise ValueError('"recombination_rate" can\'t be negative!')
+        if len(self.ref_pops_sizes) != len(self.ref_pops):
+            raise ValueError('"reference_populations" and "reference_population_sizes" should be equal in length!')
+        if len(self.foc_pops_sizes) != len(self.foc_pops):
+            raise ValueError('"focal_populations" and "focal_population_sizes" should be equal in length!')
+
+        # Handle problem with tskit implementation of single-node tree sequences
+        if self.ploidy == 1:
+            for i in range(len(self.ref_pops_sizes)):
+                if self.ref_pops_sizes[i] == 1:
+                    print(f'WARNING: Adjusting size of population "{self.ref_pops[i]}" to 2' +
+                          ' due to tskit issues with single-node tree sequences.')
+                    self.reF_pops_sizes[i] = 2
+            for i in range(len(self.foc_pops_sizes)):
+                if self.foc_pops_sizes[i] == 1:
+                    print(f'WARNING: Adjusting size of population "{self.foc_pops[i]}" to 2' +
+                          ' due to tskit issues with single-node tree sequences.')
+                    self.foc_pops_sizes[i] = 2
 
         # Load ancestral sequence if provided
         self.ancestral_sequence = None
