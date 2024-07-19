@@ -22,7 +22,6 @@ class Simulation:
         Raises:
             ValueError: On invalid configuration parameters.
         '''
-
         self.config_d = load_yaml(config_fp)
 
         # Create with None values so we can still check if they have been set without attribute errors
@@ -45,7 +44,6 @@ class Simulation:
         Raises:
             ValueError: On invalid configuration parameters.
         '''
-
         self.coalescent_simulation = CoalescentSimulation(self.config_d, demography)
         self.coalescent_simulation.run()
 
@@ -67,7 +65,6 @@ class Simulation:
         Raises:
             ValueError: If coalescent simulation has not been run first.
         '''
-
         if not self.coalescent_simulation or not self.focal_fps:
             raise ValueError('Coalescent simulation must be run before read simulations!')
 

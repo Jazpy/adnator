@@ -32,7 +32,6 @@ class CoalescentSimulation:
         Raises:
             ValueError: On invalid configuration parameters.
         '''
-
         if 'demography' not in config_d and not demography:
             raise ValueError('No demography specified')
         if 'demography' in config_d and demography:
@@ -105,7 +104,6 @@ class CoalescentSimulation:
         '''
         Run the coalescent simulation, simulates coalescent trees and mutations.
         '''
-
         # Build sample dictionaries for sim_ancestry()
         sample_sets = []
         for pop, size, time in zip(self.foc_pops, self.foc_pops_sizes, self.foc_pops_times):
@@ -138,7 +136,6 @@ class CoalescentSimulation:
             Tuple of: (list of tuples (metadata, filepath) of the written focal sequences,
                        filepath for contamination sequence)
         '''
-
         if not self.trees:
             raise RuntimeError('Need to run coalescent simulation before writing VCFs!')
 

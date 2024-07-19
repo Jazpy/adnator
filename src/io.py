@@ -25,7 +25,6 @@ def load_yaml(fp):
     Raises:
         ValueError: If required configuration parameters are not set.
     '''
-
     config = yaml.safe_load(open(fp))
 
     if 'focal_populations' not in config:
@@ -45,7 +44,6 @@ def create_directory_structure(main_dir_fp):
     Args:
         main_dir_fp (str): Filepath for top-level directory where data will be saved.
     '''
-
     if os.path.exists(main_dir_fp):
         shutil.rmtree(main_dir_fp)
     os.makedirs(main_dir_fp)
@@ -71,7 +69,6 @@ def write_fasta_sequences(out_dir, population, sequences, ploidy, chunking=60):
     Returns:
         List of tuples (metadata, filepath) of the written sequences.
     '''
-
     ret = []
 
     # Write sequences in chunks, assuming contguous sequences belong to the same individual
@@ -102,7 +99,6 @@ def parse_fragmentation_file(frag_fp):
     Returns:
         Tuple of (lengths, probabilities) describing fragmentation length distribution.
     '''
-
     lengths = []
     probs   = []
 
@@ -138,7 +134,6 @@ def __parse_damageprofiler_file(fp):
         Misincorporation object encoding probability of misincorporation given position and nucleotide,
         along with information for how much of the strand is considered.
     '''
-
     max_pos = 0
     weights = defaultdict(list)
 
