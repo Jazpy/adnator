@@ -108,13 +108,11 @@ class ReadSimulation:
                     continue
 
                 to_write += f'@SEQ_{population}_{individual}_{chromosome}_{i - 1}\n'
-                true_read = true_seq[start:start + length]
-                dmg_read  = []
+                dmg_read = true_seq[start:start + length]
 
                 # Error simulation
-                geno_errs = np.random.random(len(true_read)) < 0.00133333
-                dmg_read  = true_read
-                for j, (nuc, geno_err) in enumerate(zip(true_read, geno_errs)):
+                geno_errs = np.random.random(len(dmg_read)) < 0.00133333
+                for j, (nuc, geno_err) in enumerate(zip(dmg_read, geno_errs)):
                     # Deamination error
                     if self.mis_5 and j <= self.mis_5.max_pos:
                         dmg_read[j] = random.choices(list('ATGC'),
