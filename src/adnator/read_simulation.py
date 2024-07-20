@@ -1,7 +1,10 @@
 import os
+import sys
+import subprocess
 import random
 import ctypes
 import multiprocessing as mp
+import numpy as np
 
 from adnator.io import parse_fragmentation_file, parse_damageprofiler_files, MisincorporationData
 
@@ -91,6 +94,15 @@ class ReadSimulation:
         # Hand off to CPP
         src_dir, _ = os.path.split(__file__)
         so_path = os.path.join(src_dir, 'read_sim.so')
+
+        # Check that .so exists, try creating it if not
+        if not os.path.isfile(so_path):
+            try:
+                subprocess.run(['make'], cwd=src_dir, check=True)
+            except:
+                print('ERROR: Failed to build shared CPP library. Are Clang and OpenMP installed?')
+                sys.exit(-1)
+
         cpp_library = ctypes.cdll.LoadLibrary(so_path)
 
         pop_lst, ind_lst, chr_lst, seq_lst, out_lst = [], [], [], [], []
