@@ -24,11 +24,37 @@ using std::uniform_real_distribution;
 // Simple structure to store misincorporation profile data
 struct misincorporation_pkg {
     size_t max_pos;
+    bool valid;
+    map<pair<size_t, char>, discrete_distribution<int>> mis_prob;
 };
 
 ///////////////
 // FUNCTIONS //
 ///////////////
+
+// Turn ctypes friendly version of the data into a misincorporation package struct
+misincorporation_pkg build_mis_mapper(size_t mis_len, const size_t *mis_pos,
+                                      const char *mis_nuc, const double *mis_pro)
+{
+    misincorporation_pkg ret;
+
+    if (mis_len == 0) {
+        ret.valid = false;
+        return ret;
+    }
+
+    ret.valid = true;
+    ret.max_pos = 0;
+
+    for (size_t i = 0; i != mis_len; ++i) {
+        ret.max_pos = std::max(ret.max_pos, mis_pos[i]);
+        vector<double> probs(mis_pro + (i * 4), mis_pro + (i * 4) + 4);
+        ret.mis_prob[std::make_pair(mis_pos[i], mis_nuc[i])] =
+            discrete_distribution<int>(probs.begin(), probs.end());
+    }
+
+    return ret;
+}
 
 // Parse fragmentation distribution file into a discrete distribution
 discrete_distribution<int> build_frag_distribution(map<int, int> &frag_len_mapper, size_t frag_dist_len,
@@ -80,7 +106,8 @@ vector<pair<uint64_t, uint64_t>> simulate_read_coords(const map<int, int> &frag_
 void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const string &population,
                              const string &ind, const string &chr, const map<int, int> &frag_len_mapper,
                              discrete_distribution<int> &frag_dist, size_t num_reads, size_t seq_len,
-                             double cont_p, bool has_cont, const string &cont_seq)
+                             double cont_p, bool has_cont, const string &cont_seq,
+                             misincorporation_pkg &mis_5_mapper, misincorporation_pkg &mis_3_mapper)
 {
     // Randomness engine
     std::random_device rd;
@@ -123,8 +150,14 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
         std::generate(geno_errors.begin(), geno_errors.end(),
                       [&](){return error_dist(generator);});
 
-        // Check each base for genotyping and misincorporation damage
+        // Check each base for misincorporation damage and genotyping error
         for (size_t j = 0; j != damaged.size(); ++j) {
+            if (mis_5_mapper.valid && j <= mis_5_mapper.max_pos) {
+                damaged[j] = "ATGC"[mis_5_mapper.mis_prob.at({j, damaged[j]})(generator)];
+            } else if (mis_3_mapper.valid && (len - (j + 1)) <= mis_3_mapper.max_pos) {
+                damaged[j] = "ATGC"[mis_3_mapper.mis_prob.at({(len - (j + 1)), damaged[j]})(generator)];
+            }
+
             if (geno_errors[j] < 0.001333333) {
                 damaged[j] = "ATGC"[atgc_dist(generator)];
             }
@@ -141,11 +174,17 @@ extern "C"
 void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size_t frag_dist_len,
                     const int *frag_lens, const double *frag_probs, double cont_p,
                     const char **fasta_fps, const char **populations, const char **individuals,
-                    const char **chromosomes, const char **out_fps, const char *cont_fp)
+                    const char **chromosomes, const char **out_fps, const char *cont_fp,
+                    size_t mis_5_len, const size_t *mis_5_pos, const char *mis_5_nuc, const double *mis_5_pro,
+                    int mis_3_len, const size_t *mis_3_pos, const char *mis_3_nuc, const double *mis_3_pro)
 {
     // Build generator for fragment lengths and starts
     map<int, int> frag_len_mapper;
     auto frag_dist = build_frag_distribution(frag_len_mapper, frag_dist_len, frag_lens, frag_probs);
+
+    // Build mappers of position and nucleotide to misincorporation probabilities
+    auto mis_5_mapper = build_mis_mapper(mis_5_len, mis_5_pos, mis_5_nuc, mis_5_pro);
+    auto mis_3_mapper = build_mis_mapper(mis_3_len, mis_3_pos, mis_3_nuc, mis_3_pro);
 
     // Handle contamination sequence
     string cont_sequence = "";
@@ -153,11 +192,10 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
     if (has_cont)
         cont_sequence = load_sequence(cont_fp, seq_len);
 
-    // TODO Handle misincorporation stuff
-
     #pragma omp parallel for
     for (size_t i = 0; i != fasta_fps_len; ++i) {
         write_reads_with_errors(fasta_fps[i], out_fps[i], populations[i], individuals[i], chromosomes[i],
-                                frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence);
+                                frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence,
+                                mis_5_mapper, mis_3_mapper);
     }
 }
