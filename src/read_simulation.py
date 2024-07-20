@@ -1,5 +1,6 @@
 import os
 import random
+import ctypes
 import multiprocessing as mp
 import numpy as np
 
@@ -23,9 +24,11 @@ class ReadSimulation:
 
         Args:
             config_d (str): Configuration dictionary containing read simulation parameters.
-            num_procs (int, optional): Number of processes to spawn, will parallelize simulations
-                to a per chromosome level. Defaults to number of virtual cores in the system.
+            num_procs (int, optional): CURRENTLY IGNORED. Number of processes to spawn, will
+                parallelize simulations to a per chromosome level. Defaults to number of
+                virtual cores in the system.
         '''
+
         # Required parameters
         self.foc_pops       = config_d['focal_populations']
         self.foc_pops_sizes = config_d['focal_population_sizes']
@@ -51,84 +54,6 @@ class ReadSimulation:
         self.mis_3 = None
 
 
-    def __simulate_read_coords(self):
-        '''
-        Internal function that handles the read position and length calculations. This function
-        will be called in parallel for all focal chromosomes
-
-        Returns:
-            List of tuples (length, start) describing all simulated reads.
-        '''
-        ret = []
-
-        frags  = random.choices(self.lengths, k=self.num_reads, weights=self.probs)
-        starts = np.random.randint(0, self.seq_len - 1, self.num_reads)
-
-        return [(self.seq_len - s if s + f - 1 >= self.seq_len else f, s) for f, s in zip(frags, starts)]
-
-
-    def write_reads_with_errors_worker(self, sequence_data):
-        '''
-        Write FASTQ formatted reads to storage, while simulating genotyping error and misincorporation.
-
-        Args:
-            sequence_data (tuple of metadata and filepath): Information for the true sequence.
-            reads (list of length and start tuples): Information for the read lengths and placement.
-        '''
-        reads = self.__simulate_read_coords()
-
-        population, individual, chromosome = sequence_data[0]
-        sequence_fp = sequence_data[1]
-        out_fp = os.path.join(self.out_dir, f'{population}_{individual}.fastq')
-
-        # Load true sequence into memory
-        true_seq = []
-        with open(sequence_fp) as in_f:
-            for line in in_f:
-                if line[0] == '>':
-                    continue
-                true_seq.extend(line.strip())
-
-        # Random values that determine if read comes from contaminant or not
-        cont_errs = np.random.random(len(reads)) < self.cont_p
-
-        # Write each read to FASTQ file
-        to_write = ''
-        with open(out_fp, 'a') as out_f:
-            for i, ((length, start), cont_err) in enumerate(zip(reads, cont_errs), start=1):
-                # Write if we accumulated enough in the temp string
-                if i % 500 == 0:
-                    out_f.write(to_write)
-                    to_write = ''
-
-                # Contaminated reads are written directly
-                if cont_err:
-                    to_write += f'@SEQ_CONTAMINATED_{population}_{individual}_{chromosome}_{i - 1}\n'
-                    to_write += f'{self.cont_sequence[start:start + length]}\n+\n{"j" * length}\n'
-                    continue
-
-                to_write += f'@SEQ_{population}_{individual}_{chromosome}_{i - 1}\n'
-                dmg_read = true_seq[start:start + length]
-
-                # Error simulation
-                geno_errs = np.random.random(len(dmg_read)) < 0.00133333
-                for j, (nuc, geno_err) in enumerate(zip(dmg_read, geno_errs)):
-                    # Deamination error
-                    if self.mis_5 and j <= self.mis_5.max_pos:
-                        dmg_read[j] = random.choices(list('ATGC'),
-                                                     weights=self.mis_5.weights[(j, nuc)])[0]
-                    elif self.mis_3 and (length - (j + 1)) <= self.mis_3.max_pos:
-                        dmg_read[j] = random.choices(list('ATGC'),
-                                                     weights=self.mis_3.weights[(length - (j + 1), nuc)])[0]
-
-                    # Genotyping error
-                    if geno_err:
-                        dmg_read[j] = random.choices(list('ATGC'))[0]
-
-                to_write += f'{"".join(dmg_read)}\n+\n{"j" * length}\n'
-            out_f.write(to_write)
-
-
     def simulate_reads(self, fasta_fps, cont_fp):
         '''
         Simulate the read lengths and positions for all individuals. If a fragmentation distribution
@@ -138,6 +63,7 @@ class ReadSimulation:
         Args:
             fasta_fps (list of (metadata, filepath) tuples): Metadata and filepath for all true sequences.
         '''
+        # Get fragmentation distribution information if provided
         if self.frags:
             self.lengths, self.probs = parse_fragmentation_file(self.frags)
             avg_length = np.average(self.lengths, weights=self.probs)
@@ -146,19 +72,68 @@ class ReadSimulation:
             self.lengths, self.probs = [70], [1.0]
             self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)
 
-        # Create contamination sequence if provided
-        if cont_fp:
-            self.cont_sequence = []
-            with open(cont_fp) as in_f:
-                for line in in_f:
-                    if line[0] == '>':
-                        continue
-                    self.cont_sequence.extend(line.strip())
-
         # Get misincorporation information if provided
+        # TODO Handle this formatting for CPP in a better way, maybe JSON
+        mis_5_pos_lst, mis_5_nuc_lst, mis_5_pro_lst = [], [], []
+        mis_3_pos_lst, mis_3_nuc_lst, mis_3_pro_lst = [], [], []
         if self.mis_fps:
             self.mis_5, self.mis_3 = parse_damageprofiler_files(self.mis_fps[0], self.mis_fps[1])
+            if self.mis_5:
+                for (pos, nuc), mis_probs in self.mis_5.weights.items():
+                    mis_5_pos_lst.append(pos)
+                    mis_5_nuc_lst.append(nuc)
+                    mis_5_pro_lst.extend(mis_probs)
+            if self.mis_3:
+                for (pos, nuc), mis_probs in self.mis_3.weights.items():
+                    mis_3_pos_lst.append(pos)
+                    mis_3_nuc_lst.append(nuc)
+                    mis_3_pro_lst.extend(mis_probs)
 
-        # Simulate reads in parallel
-        pool = mp.Pool(self.num_procs)
-        pool.map(self.write_reads_with_errors_worker, fasta_fps)
+        # Hand off to CPP
+        cpp_library = ctypes.cdll.LoadLibrary('src/read_sim.so')
+
+        pop_lst, ind_lst, chr_lst, seq_lst, out_lst = [], [], [], [], []
+        for (population, individual, chromosome), seq_fp in fasta_fps:
+            pop_lst.append(population)
+            ind_lst.append(str(individual))
+            chr_lst.append(str(chromosome))
+            seq_lst.append(seq_fp)
+            out_lst.append(os.path.join(self.out_dir, f'{population}_{individual}.fastq'))
+
+        # General parameters
+        pop_arr = (ctypes.c_char_p * len(pop_lst))()
+        ind_arr = (ctypes.c_char_p * len(ind_lst))()
+        chr_arr = (ctypes.c_char_p * len(chr_lst))()
+        seq_arr = (ctypes.c_char_p * len(seq_lst))()
+        out_arr = (ctypes.c_char_p * len(out_lst))()
+        fra_arr = (ctypes.c_int    * len(self.lengths))()
+        pro_arr = (ctypes.c_double * len(self.probs))()
+
+        pop_arr[:] = [i.encode("utf-8") for i in pop_lst]
+        ind_arr[:] = [i.encode("utf-8") for i in ind_lst]
+        chr_arr[:] = [i.encode("utf-8") for i in chr_lst]
+        seq_arr[:] = [i.encode("utf-8") for i in seq_lst]
+        out_arr[:] = [i.encode("utf-8") for i in out_lst]
+        fra_arr[:] = self.lengths
+        pro_arr[:] = self.probs
+
+        # Misincorporation parameters
+        mis_5_pos_arr = (ctypes.c_size_t * len(mis_5_pos_lst))()
+        mis_5_pro_arr = (ctypes.c_double * len(mis_5_pro_lst))()
+        mis_3_pos_arr = (ctypes.c_size_t * len(mis_3_pos_lst))()
+        mis_3_pro_arr = (ctypes.c_double * len(mis_3_pro_lst))()
+
+        mis_5_nuc_arr = ''.join(mis_5_nuc_lst).encode('utf-8')
+        mis_3_nuc_arr = ''.join(mis_3_nuc_lst).encode('utf-8')
+
+        mis_5_pos_arr[:] = mis_5_pos_lst
+        mis_5_pro_arr[:] = mis_5_pro_lst
+        mis_3_pos_arr[:] = mis_3_pos_lst
+        mis_3_pro_arr[:] = mis_3_pro_lst
+
+        cpp_library.simulate_reads(ctypes.c_size_t(len(fasta_fps)), ctypes.c_size_t(self.seq_len),
+                                   ctypes.c_size_t(self.num_reads), ctypes.c_size_t(len(self.lengths)), fra_arr,
+                                   pro_arr, ctypes.c_double(self.cont_p), seq_arr, pop_arr, ind_arr, chr_arr,
+                                   out_arr, ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
+                                   ctypes.c_size_t(len(mis_5_pos_lst)), mis_5_pos_arr, mis_5_nuc_arr, mis_5_pro_arr,
+                                   ctypes.c_size_t(len(mis_3_pos_lst)), mis_3_pos_arr, mis_3_nuc_arr, mis_3_pro_arr)
