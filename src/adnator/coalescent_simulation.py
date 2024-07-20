@@ -5,7 +5,7 @@ import tskit
 import demes
 import numpy as np
 
-from src.io import write_fasta_sequences, load_ancestral_sequence
+from adnator.io import write_fasta_sequences, load_ancestral_sequence
 
 
 class CoalescentSimulation:

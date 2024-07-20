@@ -1,4 +1,4 @@
-CXX = clang++
+CXX = g++
 read_sim.so: read_simulation.o
 	$(CXX) -shared $^ -o $@ -fopenmp
 
