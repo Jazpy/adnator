@@ -182,8 +182,6 @@ class ReadSimulation:
         fra_arr[:] = self.lengths
         pro_arr[:] = self.probs
 
-        cpp_library.simulate_reads(len(fasta_fps), self.seq_len, self.ploidy, ctypes.c_double(self.coverage),
-                                   self.num_reads, len(self.lengths), fra_arr, pro_arr,
-                                   ctypes.c_double(self.cont_p), seq_arr, pop_arr, ind_arr, chr_arr, out_arr,
-                                   ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
-                                   ctypes.c_char_p((self.frags if self.frags else '').encode('utf-8')))
+        cpp_library.simulate_reads(len(fasta_fps), self.seq_len, self.num_reads, len(self.lengths), fra_arr,
+                                   pro_arr, ctypes.c_double(self.cont_p), seq_arr, pop_arr, ind_arr, chr_arr,
+                                   out_arr, ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')))
