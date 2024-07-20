@@ -2,9 +2,8 @@ import os
 import random
 import ctypes
 import multiprocessing as mp
-import numpy as np
 
-from src.io import parse_fragmentation_file, parse_damageprofiler_files, MisincorporationData
+from adnator.io import parse_fragmentation_file, parse_damageprofiler_files, MisincorporationData
 
 
 class ReadSimulation:
@@ -90,7 +89,9 @@ class ReadSimulation:
                     mis_3_pro_lst.extend(mis_probs)
 
         # Hand off to CPP
-        cpp_library = ctypes.cdll.LoadLibrary('src/read_sim.so')
+        src_dir, _ = os.path.split(__file__)
+        so_path = os.path.join(src_dir, 'read_sim.so')
+        cpp_library = ctypes.cdll.LoadLibrary(so_path)
 
         pop_lst, ind_lst, chr_lst, seq_lst, out_lst = [], [], [], [], []
         for (population, individual, chromosome), seq_fp in fasta_fps:

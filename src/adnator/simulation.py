@@ -1,8 +1,8 @@
 import multiprocessing as mp
 
-from src.coalescent_simulation import CoalescentSimulation
-from src.read_simulation import ReadSimulation
-from src.io import load_yaml, create_directory_structure
+from adnator.coalescent_simulation import CoalescentSimulation
+from adnator.read_simulation import ReadSimulation
+from adnator.io import load_yaml, create_directory_structure
 
 
 class Simulation:
