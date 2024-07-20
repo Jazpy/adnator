@@ -2,6 +2,12 @@
 
 Realistic-ish aDNA simulator.
 
+# Installation
+
+Package can be installed through `pip install adnator`.
+
+`g++` and `OpenMP` have to be installed for read simulations.
+
 # Example usage
 
 ```
