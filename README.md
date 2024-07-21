@@ -6,7 +6,7 @@ Realistic-ish aDNA simulator.
 
 Package can be installed through `pip install adnator`.
 
-`g++` and `OpenMP` have to be installed for read simulations.
+`g++` and `OpenMP` need to be installed for read simulations.
 
 # Overview
 
@@ -44,7 +44,7 @@ Four directories will be created inside `output_directory`:
 of populations. If not present in the configuration file, an msprime `Demography` object needs
 to be provided to aDNAtor's `Simulation` object's constructor.
 
-`focal_populations`: list of strings corresponding to population IDs, aDNAtor will simulate both the
+`focal_populations`: list of strings corresponding to population IDs. aDNAtor will simulate both the
 ground-truth sequences for these individuals, as well as FASTQ files resulting from read simulation.
 
 `focal_population_sizes`: list of integers detailing how many individuals to simulate for each
@@ -53,7 +53,7 @@ population in `focal_populations`.
 `focal_population_times` (optional): list of integers detailing how many generations in the past to
 sample the individuals in `focal_populations`, defaults to sampling from the present (0 generations in the past).
 
-`reference_populations` (optional): list of strings corresponding to population IDs, aDNAtor will
+`reference_populations` (optional): list of strings corresponding to population IDs. aDNAtor will
 only simulate ground-truth FASTA sequences for these individuals, without introducing any kind of alterations.
 
 `reference_population_sizes` (optional): list of integers detailing how many individuals to simulate for each
@@ -81,7 +81,7 @@ map will be used for coalescent simulations.
 `average_coverage` (optional): average coverage to simulate for FASTQ files, defaults to 5.
 
 `fragmentation_distribution` (optional): filepath to a file detailing a read length distribution. This file is made up
-of two columns without a header. The first column is the length of the read, and the second value is the probability
+of two columns without a header. The first column is the length of the read, and the second column is the probability
 of a read having the corresponding length. Values in the second column should add up to 1.
 
 `fragment_length` (optional): constant read length to simulate if no `fragmentation_distribution` argument is provided,
@@ -116,9 +116,9 @@ two focal populations and two reference populations, with the following paramete
 10. Simulating the misincorporation rates detailed in `utilities/example_5p_misincorporations.txt` and `utilities/example_3p_misincorporations.txt`.
 11. Placing all results in `example_data/`.
 
-We would write the following configuration file: (provided in `utilities/example_configuration.yaml`)
+We would write the following configuration file (provided in `utilities/example_configuration.yaml`):
 
-```
+```yaml
 # General simulation parameters
 output_directory: './example_data/'
 
@@ -142,7 +142,7 @@ misincorporation_files: ['utilities/example_5p_misincorporations.txt', 'utilitie
 
 We can then execute the coalescent and read simulations from Python:
 
-```
+```python
 from adnator.simulation import Simulation
 
 
