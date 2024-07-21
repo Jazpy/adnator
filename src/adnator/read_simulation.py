@@ -40,7 +40,9 @@ class ReadSimulation:
         self.cont_p    = config_d.get('contamination_proportion', 0)
         self.coverage  = config_d.get('average_coverage', 5)
         self.frags     = config_d.get('fragmentation_distribution')
+        self.frag_len  = int(config_d.get('fragment_length', 70))
         self.seq_len   = config_d.get('sequence_length', 10_000)
+        self.gen_err   = config_d.get('genotyping_error', False)
         self.ploidy    = config_d.get('ploidy', 2)
         self.out_dir   = os.path.join(config_d.get('output_directory', '.'), 'focal_reads')
         self.num_procs = num_procs
@@ -60,7 +62,7 @@ class ReadSimulation:
         '''
         Simulate the read lengths and positions for all individuals. If a fragmentation distribution
         is provided, this will be taken as the basis for the read lengths, otherwise a constant length
-        of 70bp will be used. Reads / fragments are dispersed uniformly through the sequence.
+        will be used. Reads / fragments are dispersed uniformly through the sequence.
 
         Args:
             fasta_fps (list of (metadata, filepath) tuples): Metadata and filepath for all true sequences.
@@ -71,8 +73,8 @@ class ReadSimulation:
             avg_length = np.average(self.lengths, weights=self.probs)
             self.num_reads = round(((self.seq_len / avg_length) / self.ploidy) * self.coverage)
         else:
-            self.lengths, self.probs = [70], [1.0]
-            self.num_reads = round(((self.seq_len / 70) / self.ploidy) * self.coverage)
+            self.lengths, self.probs = [self.frag_len], [1.0]
+            self.num_reads = round(((self.seq_len / self.frag_len) / self.ploidy) * self.coverage)
 
         # Get misincorporation information if provided
         # TODO Handle this formatting for CPP in a better way, maybe JSON
@@ -149,4 +151,5 @@ class ReadSimulation:
                                    pro_arr, ctypes.c_double(self.cont_p), seq_arr, pop_arr, ind_arr, chr_arr,
                                    out_arr, ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
                                    ctypes.c_size_t(len(mis_5_pos_lst)), mis_5_pos_arr, mis_5_nuc_arr, mis_5_pro_arr,
-                                   ctypes.c_size_t(len(mis_3_pos_lst)), mis_3_pos_arr, mis_3_nuc_arr, mis_3_pro_arr)
+                                   ctypes.c_size_t(len(mis_3_pos_lst)), mis_3_pos_arr, mis_3_nuc_arr, mis_3_pro_arr,
+                                   ctypes.c_bool(self.gen_err))

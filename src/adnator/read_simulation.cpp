@@ -107,7 +107,8 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
                              const string &ind, const string &chr, const map<int, int> &frag_len_mapper,
                              discrete_distribution<int> &frag_dist, size_t num_reads, size_t seq_len,
                              double cont_p, bool has_cont, const string &cont_seq,
-                             misincorporation_pkg &mis_5_mapper, misincorporation_pkg &mis_3_mapper)
+                             misincorporation_pkg &mis_5_mapper, misincorporation_pkg &mis_3_mapper,
+                             bool has_geno_err)
 {
     // Randomness engine
     std::random_device rd;
@@ -147,8 +148,10 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
 
         // Generate dice rolls for genotyping error at each base
         vector<double> geno_errors(damaged.size());
-        std::generate(geno_errors.begin(), geno_errors.end(),
-                      [&](){return error_dist(generator);});
+        if (has_geno_err) {
+            std::generate(geno_errors.begin(), geno_errors.end(),
+                          [&](){return error_dist(generator);});
+        }
 
         // Check each base for misincorporation damage and genotyping error
         for (size_t j = 0; j != damaged.size(); ++j) {
@@ -158,7 +161,7 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
                 damaged[j] = "ATGC"[mis_3_mapper.mis_prob.at({(len - (j + 1)), damaged[j]})(generator)];
             }
 
-            if (geno_errors[j] < 0.001333333) {
+            if (has_geno_err && geno_errors[j] < 0.001333333) {
                 damaged[j] = "ATGC"[atgc_dist(generator)];
             }
         }
@@ -176,7 +179,8 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
                     const char **fasta_fps, const char **populations, const char **individuals,
                     const char **chromosomes, const char **out_fps, const char *cont_fp,
                     size_t mis_5_len, const size_t *mis_5_pos, const char *mis_5_nuc, const double *mis_5_pro,
-                    int mis_3_len, const size_t *mis_3_pos, const char *mis_3_nuc, const double *mis_3_pro)
+                    int mis_3_len, const size_t *mis_3_pos, const char *mis_3_nuc, const double *mis_3_pro,
+                    bool has_geno_err)
 {
     // Build generator for fragment lengths and starts
     map<int, int> frag_len_mapper;
@@ -196,6 +200,6 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
     for (size_t i = 0; i != fasta_fps_len; ++i) {
         write_reads_with_errors(fasta_fps[i], out_fps[i], populations[i], individuals[i], chromosomes[i],
                                 frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence,
-                                mis_5_mapper, mis_3_mapper);
+                                mis_5_mapper, mis_3_mapper, has_geno_err);
     }
 }

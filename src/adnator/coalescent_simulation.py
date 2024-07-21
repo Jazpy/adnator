@@ -116,7 +116,7 @@ class CoalescentSimulation:
         # Run coalescent simulation
         self.trees = msprime.sim_ancestry(sample_sets, sequence_length=self.seq_len,
                                           demography=self.dem_model,
-                                          recombination_rate=self.rho or self.rho_map)
+                                          recombination_rate=self.rho or msprime.read_hapmap(self.rho_map))
         self.trees = msprime.sim_mutations(self.trees, rate=self.mu)
 
         # Map population string IDs to integer IDs

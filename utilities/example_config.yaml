@@ -6,6 +6,7 @@ demography: 'utilities/example_demography.yaml'
 sequence_length: 100000
 focal_populations: ['FOC0', 'FOC1']
 focal_population_sizes: [5, 10]
+focal_population_times: [10, 50]
 reference_populations: ['REF0', 'REF1']
 reference_population_sizes: [5, 10]
 ancestral_sequence: 'utilities/ancestral_sequence.fasta'
