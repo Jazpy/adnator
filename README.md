@@ -99,6 +99,8 @@ from this population will be simulated to serve as the source of contaminated re
 `contamination_proportion` (optional): floating point value between 0 and 1, indicates the proportion of reads
 that will be contaminated, defaults to 0.
 
+`contamination_sequence` (optional): filepath to FASTA sequence to use as the source of contaminated reads.
+
 # Example Usage
 
 In order to run a simulation on the included demographic model `utilities/example_demography.yaml`, which specifies

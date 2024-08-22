@@ -89,8 +89,12 @@ class CoalescentSimulation:
             self.seq_len = len(self.ancestral_sequence)
             config_d['sequence_length'] = self.seq_len
 
-        # Assume no contamination unless specified
+        # Assume no contamination unless specified, can't specify contamination FASTA and population at the same time
         self.con_pop = config_d.get('contamination_population', None)
+        self.con_fp  = config_d.get('contamination_sequence', None)
+
+        if self.con_pop and self.con_fp:
+            raise ValueError('"contamination_population" and "contamination_sequence" can\'t be used at the same time!')
 
         # Assume sampling at present unless specified
         self.foc_pops_times = config_d.get('focal_population_times', [0] * len(self.foc_pops))
@@ -157,14 +161,13 @@ class CoalescentSimulation:
                                   pop, curr_seqs, self.ploidy)
 
         # Write contamination sequence if applicable
-        cont_fp = None
         if self.con_pop:
             con_sample = self.trees.samples(population=self.pop_id_d[self.con_pop])[-1]
             con_seq    = self.trees.alignments(reference_sequence=self.ancestral_sequence,
                                                samples=[con_sample])
 
-            cont_fp = write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
-                                            'CONTAMINATION_SEQUENCE', con_seq, 1)[0][1]
+            self.con_fp = write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
+                                                'CONTAMINATION_SEQUENCE', con_seq, 1)[0][1]
 
         # Write ancestral sequence
         write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
@@ -185,4 +188,4 @@ class CoalescentSimulation:
             ret.extend(write_fasta_sequences(os.path.join(self.out_dir, 'focal_sequences'),
                                              pop, curr_seqs, self.ploidy))
 
-        return ret, cont_fp
+        return ret, self.con_fp
