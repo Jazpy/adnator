@@ -1,6 +1,6 @@
 # aDNAtor
 
-![@gsusultimate](https://jazpy.github.io/links/CyberMamut.png)
+<img src="https://jazpy.github.io/links/CyberMamut.png" alt="@gsusultimate" width="50%">
 
 Realistic-ish aDNA simulator.
 
