@@ -1,5 +1,7 @@
 # aDNAtor
 
+![@gsusultimate](https://jazpy.github.io/links/CyberMamut.png)
+
 Realistic-ish aDNA simulator.
 
 # Installation
