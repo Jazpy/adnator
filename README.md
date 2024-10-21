@@ -1,6 +1,6 @@
 # aDNAtor
 
-<center><img src="https://jazpy.github.io/links/CyberMamut.png" alt="@gsusultimate" width="50%"></center>
+<p align="center"><img src="https://jazpy.github.io/links/CyberMamut.png" alt="@gsusultimate" width="50%"></p>
 
 Realistic-ish aDNA simulator.
 
