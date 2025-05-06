@@ -17,7 +17,7 @@ class ReadSimulation:
         - Simulation parameters.
     '''
 
-    def __init__(self, config_d, num_procs=mp.cpu_count):
+    def __init__(self, config_d, num_procs=mp.cpu_count, seed=None):
         '''
         Create the simulation parameters, such as coverage, fragment length distribution,
         damage parameters, etc.
@@ -29,6 +29,7 @@ class ReadSimulation:
             num_procs (int, optional): CURRENTLY IGNORED. Number of processes to spawn, will
                 parallelize simulations to a per chromosome level. Defaults to number of
                 virtual cores in the system.
+            seed (int, optional): Random seed to use for read simulation (includes, damage, positions, etc.)
         '''
 
         # Required parameters
@@ -51,6 +52,9 @@ class ReadSimulation:
             raise ValueError('"coverage" must be larger than 0!')
         if self.cont_p < 0:
             raise ValueError('"contamination_proportion" can\'t be negative!')
+        if seed == -1:
+            raise ValueError('Please use a different random seed for read simulation!')
+        self.seed = seed if seed else -1
 
         # Might be set later
         self.cont_sequence = None
@@ -152,4 +156,4 @@ class ReadSimulation:
                                    out_arr, ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
                                    ctypes.c_size_t(len(mis_5_pos_lst)), mis_5_pos_arr, mis_5_nuc_arr, mis_5_pro_arr,
                                    ctypes.c_size_t(len(mis_3_pos_lst)), mis_3_pos_arr, mis_3_nuc_arr, mis_3_pro_arr,
-                                   ctypes.c_bool(self.gen_err))
+                                   ctypes.c_bool(self.gen_err), ctypes.c_int(self.seed))

@@ -108,11 +108,10 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
                              discrete_distribution<int> &frag_dist, size_t num_reads, size_t seq_len,
                              double cont_p, bool has_cont, const string &cont_seq,
                              misincorporation_pkg &mis_5_mapper, misincorporation_pkg &mis_3_mapper,
-                             bool has_geno_err)
+                             bool has_geno_err, int random_seed)
 {
     // Randomness engine
-    std::random_device rd;
-    mt19937 generator(rd());
+    mt19937 generator(random_seed);
 
     // Distributions for randomness. TODO Move to shared memory?
     uniform_real_distribution<double>  error_dist(0.f, 1.f);
@@ -127,21 +126,22 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
 
     // Write each read to FASTQ file
     std::ofstream out_f(out_fp, std::ofstream::out);
-    string endo_read_tag = "@SEQ_" + population + "_" + ind + "_" + chr + "_";
-    string cont_read_tag = "@SEQ_CONTAMINATED_" + population + "_" + ind + "_" + chr + "_";
+    string read_tag_info = population + "_" + ind + "_" + chr + "_";
+    string endo_read_tag = "@SEQ_" + read_tag_info;
+    string cont_read_tag = "@SEQ_CONTAMINATED_" + read_tag_info;
     for (size_t i = 0; i != read_coords.size(); ++i) {
         uint64_t start = read_coords[i].first;
         uint64_t len   = read_coords[i].second;
         string quals(len, 'j');
+        string curr_read_info = std::to_string(i) + "_" + std::to_string(start);
 
         // Introduce contamination if contamination sequence was provided
         if (has_cont && error_dist(generator) < cont_p) {
-            out_f << cont_read_tag + std::to_string(i) + "\n" + cont_seq.substr(start, len) + "\n" + quals + "\n";
+            out_f << cont_read_tag + curr_read_info + "\n" + cont_seq.substr(start, len) + "\n" + quals + "\n";
             continue;
         }
 
-        string read_tag = endo_read_tag + std::to_string(i);
-        string to_write = read_tag + "\n";
+        string to_write = endo_read_tag + curr_read_info + "\n";
 
         // Read that will get damaged
         string damaged = true_sequence.substr(start, len);
@@ -155,6 +155,9 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
 
         // Check each base for misincorporation damage and genotyping error
         for (size_t j = 0; j != damaged.size(); ++j) {
+            if (damaged[j] != 'A' && damaged[j] != 'T' && damaged[j] != 'G' && damaged[j] != 'C')
+                continue;
+
             if (mis_5_mapper.valid && j <= mis_5_mapper.max_pos) {
                 damaged[j] = "ATGC"[mis_5_mapper.mis_prob.at({j, damaged[j]})(generator)];
             } else if (mis_3_mapper.valid && (len - (j + 1)) <= mis_3_mapper.max_pos) {
@@ -180,7 +183,7 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
                     const char **chromosomes, const char **out_fps, const char *cont_fp,
                     size_t mis_5_len, const size_t *mis_5_pos, const char *mis_5_nuc, const double *mis_5_pro,
                     int mis_3_len, const size_t *mis_3_pos, const char *mis_3_nuc, const double *mis_3_pro,
-                    bool has_geno_err)
+                    bool has_geno_err, int random_seed)
 {
     // Build generator for fragment lengths and starts
     map<int, int> frag_len_mapper;
@@ -196,10 +199,23 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
     if (has_cont)
         cont_sequence = load_sequence(cont_fp, seq_len);
 
+    // Generate random seeds for all parallelized iterations
+    mt19937 main_rng;
+    vector<int> random_seeds;
+    if (random_seed == -1) {
+        std::random_device rd;
+        main_rng.seed(rd());
+    } else {
+        main_rng.seed(random_seed);
+    }
+
+    for (size_t i = 0; i != fasta_fps_len; ++i)
+        random_seeds.push_back(main_rng());
+
     #pragma omp parallel for
     for (size_t i = 0; i != fasta_fps_len; ++i) {
         write_reads_with_errors(fasta_fps[i], out_fps[i], populations[i], individuals[i], chromosomes[i],
                                 frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence,
-                                mis_5_mapper, mis_3_mapper, has_geno_err);
+                                mis_5_mapper, mis_3_mapper, has_geno_err, random_seeds[i]);
     }
 }

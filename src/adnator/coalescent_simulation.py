@@ -16,7 +16,7 @@ class CoalescentSimulation:
         - Simulation parameters.
     '''
 
-    def __init__(self, config_d, demography=None):
+    def __init__(self, config_d, demography=None, seed=None):
         '''
         Create the simulation parameters, such as demography, focal populations, number of individuals, etc.
 
@@ -28,6 +28,7 @@ class CoalescentSimulation:
             config_d (str): Configuration dictionary containing coalescent simulation parameters.
             demography (Demography, optional): msprime Demography object if none is specified in
                 the configuration dictionary. Defaults to None.
+            seed (int, optional): msprime random seed to use for coalescent and mutation simulations.
 
         Raises:
             ValueError: On invalid configuration parameters.
@@ -52,6 +53,7 @@ class CoalescentSimulation:
         self.rho     = config_d.get('recombination_rate', None if self.rho_map else 1.5e-8)
         self.ploidy  = config_d.get('ploidy', 2)
         self.out_dir = config_d.get('output_directory', '.')
+        self.seed    = seed
 
         # Error handling
         if self.rho and self.rho_map:
@@ -100,11 +102,12 @@ class CoalescentSimulation:
         self.foc_pops_times = config_d.get('focal_population_times', [0] * len(self.foc_pops))
         self.ref_pops_times = config_d.get('reference_population_times', [0] * len(self.ref_pops))
 
+
         # Set to None so we can build them only if needed
         self.trees = None
 
 
-    def run(self):
+    def run(self, mut_model=None):
         '''
         Run the coalescent simulation, simulates coalescent trees and mutations.
         '''
@@ -119,9 +122,9 @@ class CoalescentSimulation:
 
         # Run coalescent simulation
         self.trees = msprime.sim_ancestry(sample_sets, sequence_length=self.seq_len,
-                                          demography=self.dem_model,
+                                          demography=self.dem_model, random_seed=self.seed,
                                           recombination_rate=self.rho or msprime.read_hapmap(self.rho_map))
-        self.trees = msprime.sim_mutations(self.trees, rate=self.mu)
+        self.trees = msprime.sim_mutations(self.trees, rate=self.mu, random_seed=self.seed, model=mut_model)
 
         # Map population string IDs to integer IDs
         self.pop_id_d = {}
@@ -146,9 +149,26 @@ class CoalescentSimulation:
         if not self.ancestral_sequence:
             self.ancestral_sequence = tskit.random_nucleotides(self.seq_len)
 
+        # Remove TreeSequence sites at missing positions accoring to the reference sequence
+        to_remove = [site.id for site in self.trees.sites() if
+                     self.ancestral_sequence[int(site.position)] in ['N', '.']]
+        self.trees = self.trees.delete_sites(to_remove)
+
         # Write samples in reference populations
         for pop in self.ref_pops:
             curr_samples = self.trees.samples(population=self.pop_id_d[pop])
+            # Exclude contamination haplotype if in this population
+            if pop == self.con_pop:
+                curr_samples = curr_samples[:-1]
+
+            # Write VCF
+            curr_individuals   = [ind.id for ind in self.trees.individuals() if
+                                  set(ind.nodes).issubset(set(curr_samples))]
+            curr_samples_names = [f'{pop}_{i}' for i in range(len(curr_individuals))]
+            with open(os.path.join(self.out_dir, f'miscellaneous/{pop}_NO_DAMAGE.vcf'), 'w') as out_f:
+                self.trees.write_vcf(out_f, individuals=curr_individuals,
+                                     individual_names=curr_samples_names,
+                                     position_transform=lambda x: np.array(x) + 1)
 
             # Don't use contamination individual if it belongs to this population
             if self.con_pop == pop:
@@ -170,6 +190,10 @@ class CoalescentSimulation:
                                                 'CONTAMINATION_SEQUENCE', con_seq, 1)[0][1]
 
         # Write ancestral sequence
+        self.ancestral_sequence = list(self.ancestral_sequence)
+        for site in self.trees.sites():
+            self.ancestral_sequence[int(site.position)] = site.ancestral_state
+        self.ancestral_sequence = ''.join(self.ancestral_sequence)
         write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
                               'REFERENCE_SEQUENCE', [self.ancestral_sequence], 1)
 
@@ -177,6 +201,18 @@ class CoalescentSimulation:
         ret = []
         for pop in self.foc_pops:
             curr_samples = self.trees.samples(population=self.pop_id_d[pop])
+            # Exclude contamination haplotype if in this population
+            if pop == self.con_pop:
+                curr_samples = curr_samples[:-1]
+
+            # Write VCF
+            curr_individuals   = [ind.id for ind in self.trees.individuals() if
+                                  set(ind.nodes).issubset(set(curr_samples))]
+            curr_samples_names = [f'{pop}_{i}' for i in range(len(curr_individuals))]
+            with open(os.path.join(self.out_dir, f'miscellaneous/{pop}_NO_DAMAGE.vcf'), 'w') as out_f:
+                self.trees.write_vcf(out_f, individuals=curr_individuals,
+                                     individual_names=curr_samples_names,
+                                     position_transform=lambda x: np.array(x) + 1)
 
             # Don't use contamination individual if it belongs to this population
             if self.con_pop == pop:
