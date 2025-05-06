@@ -6,8 +6,6 @@ from setuptools import setup
 requirements=[
     'attrs>=23.2.0',
     'demes>=0.2.3',
-    'jsonschema>=4.22.0',
-    'jsonschema-specifications>=2023.12.1',
     'msprime>=1.3.1',
     'newick>=1.9.0',
     'numpy>=1.26.4',
