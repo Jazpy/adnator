@@ -125,7 +125,7 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
     auto true_sequence = load_sequence(fasta_fp, seq_len);
 
     // Write each read to FASTQ file
-    std::ofstream out_f(out_fp, std::ofstream::out);
+    std::ofstream out_f(out_fp, std::ios::app);
     string read_tag_info = population + "_" + ind + "_" + chr + "_";
     string endo_read_tag = "@SEQ_" + read_tag_info;
     string cont_read_tag = "@SEQ_CONTAMINATED_" + read_tag_info;
@@ -183,7 +183,7 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
                     const char **chromosomes, const char **out_fps, const char *cont_fp,
                     size_t mis_5_len, const size_t *mis_5_pos, const char *mis_5_nuc, const double *mis_5_pro,
                     int mis_3_len, const size_t *mis_3_pos, const char *mis_3_nuc, const double *mis_3_pro,
-                    bool has_geno_err, int random_seed)
+                    bool has_geno_err, int random_seed, size_t ploidy)
 {
     // Build generator for fragment lengths and starts
     map<int, int> frag_len_mapper;
@@ -212,10 +212,12 @@ void simulate_reads(size_t fasta_fps_len, size_t seq_len, size_t num_reads, size
     for (size_t i = 0; i != fasta_fps_len; ++i)
         random_seeds.push_back(main_rng());
 
-    #pragma omp parallel for
-    for (size_t i = 0; i != fasta_fps_len; ++i) {
-        write_reads_with_errors(fasta_fps[i], out_fps[i], populations[i], individuals[i], chromosomes[i],
-                                frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence,
-                                mis_5_mapper, mis_3_mapper, has_geno_err, random_seeds[i]);
+    # pragma omp parallel for
+    for (size_t i = 0; i < fasta_fps_len; i += ploidy) {
+        for (size_t j = i; j != i + ploidy; ++j) {
+            write_reads_with_errors(fasta_fps[j], out_fps[j], populations[j], individuals[j], chromosomes[j],
+                                    frag_len_mapper, frag_dist, num_reads, seq_len, cont_p, has_cont, cont_sequence,
+                                    mis_5_mapper, mis_3_mapper, has_geno_err, random_seeds[j]);
+        }
     }
 }

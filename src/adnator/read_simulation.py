@@ -44,6 +44,7 @@ class ReadSimulation:
         self.frag_len  = int(config_d.get('fragment_length', 70))
         self.seq_len   = config_d.get('sequence_length', 10_000)
         self.gen_err   = config_d.get('genotyping_error', False)
+        self.f_per_hap = config_d.get('file_per_haplotype', False)
         self.ploidy    = config_d.get('ploidy', 2)
         self.out_dir   = os.path.join(config_d.get('output_directory', '.'), 'focal_reads')
         self.num_procs = num_procs
@@ -117,7 +118,10 @@ class ReadSimulation:
             ind_lst.append(str(individual))
             chr_lst.append(str(chromosome))
             seq_lst.append(seq_fp)
-            out_lst.append(os.path.join(self.out_dir, f'{population}_{individual}.fastq'))
+            if self.f_per_hap:
+                out_lst.append(os.path.join(self.out_dir, f'{population}_{individual}_{chromosome}.fastq'))
+            else:
+                out_lst.append(os.path.join(self.out_dir, f'{population}_{individual}.fastq'))
 
         # General parameters
         pop_arr = (ctypes.c_char_p * len(pop_lst))()
@@ -156,4 +160,4 @@ class ReadSimulation:
                                    out_arr, ctypes.c_char_p((cont_fp if cont_fp else '').encode('utf-8')),
                                    ctypes.c_size_t(len(mis_5_pos_lst)), mis_5_pos_arr, mis_5_nuc_arr, mis_5_pro_arr,
                                    ctypes.c_size_t(len(mis_3_pos_lst)), mis_3_pos_arr, mis_3_nuc_arr, mis_3_pro_arr,
-                                   ctypes.c_bool(self.gen_err), ctypes.c_int(self.seed))
+                                   ctypes.c_bool(self.gen_err), ctypes.c_int(self.seed), ctypes.c_size_t(self.ploidy))

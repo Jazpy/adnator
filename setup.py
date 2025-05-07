@@ -21,7 +21,7 @@ requirements=[
 setup(
     name='adnator',
     install_requires=requirements,
-    version='1.3',
+    version='1.3.2',
     author='Jazeps Medina Tretmanis',
     author_email='jaz.medtre@gmail.com',
     description='A realistic-ish aDNA simulator',

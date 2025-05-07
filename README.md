@@ -103,6 +103,8 @@ that will be contaminated, defaults to 0.
 
 `contamination_sequence` (optional): filepath to FASTA sequence to use as the source of contaminated reads.
 
+`file_per_haplotype` (optional): boolean value, if True, FASTQ files will be generated per haplotype instead of per individual. Defaults to False.
+
 # Example Usage
 
 In order to run a simulation on the included demographic model `utilities/example_demography.yaml`, which specifies

@@ -214,10 +214,6 @@ class CoalescentSimulation:
                                      individual_names=curr_samples_names,
                                      position_transform=lambda x: np.array(x) + 1)
 
-            # Don't use contamination individual if it belongs to this population
-            if self.con_pop == pop:
-                curr_samples = np.delete(curr_samples, -1)
-
             curr_seqs = self.trees.alignments(reference_sequence=self.ancestral_sequence,
                                               samples=curr_samples)
 
