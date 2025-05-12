@@ -137,7 +137,7 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
 
         // Introduce contamination if contamination sequence was provided
         if (has_cont && error_dist(generator) < cont_p) {
-            out_f << cont_read_tag + curr_read_info + "\n" + cont_seq.substr(start, len) + "\n" + quals + "\n";
+            out_f << cont_read_tag + curr_read_info + "\n" + cont_seq.substr(start, len) + "\n+\n" + quals + "\n";
             continue;
         }
 
@@ -170,7 +170,7 @@ void write_reads_with_errors(const string &fasta_fp, const string &out_fp, const
         }
 
         // Write
-        to_write += damaged + "\n" + quals + "\n";
+        to_write += damaged + "\n+\n" + quals + "\n";
         out_f << to_write;
     }
 }
