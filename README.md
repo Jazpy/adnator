@@ -80,7 +80,8 @@ map will be used for coalescent simulations.
 
 ## Read simulation parameters
 
-`average_coverage` (optional): average coverage to simulate for FASTQ files, defaults to 5.
+`average_coverage` (optional): average coverage to simulate for FASTQ files, defaults to 5. Can be set to a list
+to indicate multiple simulation runs using different coverage parameters but the same underlying sequences.
 
 `fragmentation_distribution` (optional): filepath to a file detailing a read length distribution. This file is made up
 of two columns without a header. The first column is the length of the read, and the second column is the probability
@@ -99,7 +100,8 @@ for all reads following the specified distributions.
 from this population will be simulated to serve as the source of contaminated reads.
 
 `contamination_proportion` (optional): floating point value between 0 and 1, indicates the proportion of reads
-that will be contaminated, defaults to 0.
+that will be contaminated, defaults to 0. Can be set to a list to indicate multiple simulation runs using different
+contamination parameters but the same underlying sequences.
 
 `contamination_sequence` (optional): filepath to FASTA sequence to use as the source of contaminated reads.
 
