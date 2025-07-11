@@ -87,6 +87,7 @@ class CoalescentSimulation:
         # Load ancestral sequence if provided
         self.ancestral_sequence = None
         if self.anc_fp:
+            self.mu *= 4
             self.ancestral_sequence = load_ancestral_sequence(self.anc_fp, self.seq_len)
             self.seq_len = len(self.ancestral_sequence)
             config_d['sequence_length'] = self.seq_len
@@ -151,7 +152,8 @@ class CoalescentSimulation:
 
         # Remove TreeSequence sites at missing positions accoring to the reference sequence
         to_remove = [site.id for site in self.trees.sites() if
-                     self.ancestral_sequence[int(site.position)] in ['N', '.']]
+                     self.ancestral_sequence[int(site.position)] in ['N', '.'] or
+                     self.ancestral_sequence[int(site.position)] != site.ancestral_state]
         self.trees = self.trees.delete_sites(to_remove)
 
         # Write samples in reference populations
@@ -190,10 +192,6 @@ class CoalescentSimulation:
                                                 'CONTAMINATION_SEQUENCE', con_seq, 1)[0][1]
 
         # Write ancestral sequence
-        self.ancestral_sequence = list(self.ancestral_sequence)
-        for site in self.trees.sites():
-            self.ancestral_sequence[int(site.position)] = site.ancestral_state
-        self.ancestral_sequence = ''.join(self.ancestral_sequence)
         write_fasta_sequences(os.path.join(self.out_dir, 'miscellaneous'),
                               'REFERENCE_SEQUENCE', [self.ancestral_sequence], 1)
 
